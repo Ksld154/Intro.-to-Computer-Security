@@ -44,8 +44,8 @@ struct udpheader {
 struct dnsheader {
 	unsigned short int query_id;
 	unsigned short int flags;
-	unsigned short int q_count
-	unsigned short int ans_count
+	unsigned short int q_count;
+	unsigned short int ans_count;
 	unsigned short int auth_count;
 	unsigned short int add_count;
 };
@@ -75,11 +75,11 @@ unsigned short csum(unsigned short *buf, int nwords){       //
 }
 
 
-
-// turn "www.google.com" into "www3google6com3"
+// format dns query's domain name
+// example: turn "www.google.com" into "3www6google3com0"
 void dns_query_format(unsigned char *dns, unsigned char *host){
 	int lock = 0, i;
-	strcat((char*)host,".");
+	strcat((char*)host, ".");
 	for(i = 0 ; i < strlen((char*)host) ; i++) {
 		if(host[i]=='.'){
 			*dns++ = i-lock;
@@ -89,7 +89,7 @@ void dns_query_format(unsigned char *dns, unsigned char *host){
 			lock++;
 		}
 	}
-	*dns++=0x00;
+	*dns++=0x00;  // indicate the end of the string
 }
 
 
@@ -169,12 +169,12 @@ int main(int argc, char *argv[]){
 
 
     struct dnsheader *dns = (struct dnsheader *) (buffer + sizeof(struct ipheader) + sizeof(struct udpheader));
-	dns->id = (unsigned short) htons(getpid());
+	dns->query_id = (unsigned short) htons(getpid());
 	dns->flags = htons(0x0100);
-	dns->qcount = htons(1);
-	dns->ans  = 0;
-	dns->auth = 0;
-	dns->add  = 0;
+	dns->q_count = htons(1);
+	dns->ans_count  = 0;
+	dns->auth_count = 0;
+	dns->add_count  = 0;
 
 
     unsigned char *packet_headers;
@@ -184,28 +184,20 @@ int main(int argc, char *argv[]){
 	// strcpy(dns_rcrd, dns_record);
 
     unsigned char dns_domain[] = "www.google.com";
-	dns_query_format(packet_headers , dns_domain);
+    unsigned char *dns_domain_save;
+	strcpy(dns_domain, dns_domain_save);
+
+    int domain_len = strlen((const char *)dns_domain_save)+2);
+	dns_query_format(packet_headers, dns_domain);
 	
 
 
 
 	struct dnsquery *q;
-	q = (query *)(buffer + sizeof(struct ipheader) + sizeof(struct udpheader) + sizeof(struct dnsheader) + (strlen(dns_name)+1);
+	q = (struct dnsquery *)(buffer + sizeof(struct ipheader) + sizeof(struct udpheader) + sizeof(struct dnsheader) + domain_len);
 	q->qtype  = htons(0x00ff);  // ANY ??
-	q->qclass = htons(0x1);
+	q->qclass = htons(0x0001);  // IN
     
-
-
-
-
-
-
-
-
-
-
-
-
 
 
     // Inform the kernel do not fill up the packet structure. we will build our own...
