@@ -146,6 +146,7 @@ int main(int argc, char *argv[]){
     ip->iph_ihl = 5;
     ip->iph_ver = 4;
     ip->iph_tos = 16; // Low delay
+    // ip->tot_len = sizeof(iph) + sizeof(udph) + sizeof(dns_hdr) + (strlen(dns_name)+1) + sizeof(query);
     ip->iph_len = sizeof(struct ipheader) + sizeof(struct udpheader);
     ip->iph_ident = htons(54321);
     ip->iph_ttl = 64; // hops
@@ -184,10 +185,10 @@ int main(int argc, char *argv[]){
 	// strcpy(dns_rcrd, dns_record);
 
     unsigned char dns_domain[] = "www.google.com";
-    unsigned char *dns_domain_save;
-	strcpy(dns_domain, dns_domain_save);
+    unsigned char dns_domain_save[] = "www.google.com";
+	// strcpy(dns_domain, dns_domain_save);
 
-    int domain_len = strlen((const char *)dns_domain_save)+2);
+    int domain_len = strlen((const char *)dns_domain_save)+2;
 	dns_query_format(packet_headers, dns_domain);
 	
 
@@ -198,6 +199,8 @@ int main(int argc, char *argv[]){
 	q->qtype  = htons(0x00ff);  // ANY ??
 	q->qclass = htons(0x0001);  // IN
     
+    ip->iph_len = sizeof(struct ipheader) + sizeof(struct udpheader) + sizeof(struct dnsheader) + domain_len + sizeof(struct dnsquery);
+    udp->udph_len = htons(sizeof(struct udpheader) + sizeof(struct dnsheader) + domain_len + sizeof(struct dnsquery));
 
 
     // Inform the kernel do not fill up the packet structure. we will build our own...
