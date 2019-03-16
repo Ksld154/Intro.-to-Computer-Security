@@ -18,12 +18,12 @@
 
 // The IP header's structure
 struct ipheader {
-    unsigned char      iph_ihl:5, iph_ver:4;
+    unsigned char      iph_ihl:4, iph_ver:4;
     unsigned char      iph_tos;
     unsigned short int iph_len;
     unsigned short int iph_ident;
-    unsigned char      iph_flag;
-    unsigned short int iph_offset;
+    unsigned char      iph_flag:3;
+    unsigned short int iph_offset:13;
     unsigned char      iph_ttl;
     unsigned char      iph_protocol;
     unsigned short int iph_chksum;
@@ -40,7 +40,23 @@ struct udpheader {
 };
 // total udp header length: 8 bytes (=64 bits)
 
- 
+// DNS header's structure
+struct dnsheader {
+	unsigned short int query_id;
+	unsigned short int flags;
+	unsigned short int q_count
+	unsigned short int ans_count
+	unsigned short int auth_count;
+	unsigned short int add_count;
+};
+
+struct dnsquery{
+    unsigned short int qtype;
+    unsigned short int qclass;
+};
+
+
+
 //  Function for checksum calculation. From the RFC,
 //  the checksum algorithm is:
 //  "The checksum field is the 16 bit one's complement of the one's
@@ -58,6 +74,25 @@ unsigned short csum(unsigned short *buf, int nwords){       //
     return (unsigned short)(~sum);
 }
 
+
+
+// turn "www.google.com" into "www3google6com3"
+void dns_query_format(unsigned char *dns, unsigned char *host){
+	int lock = 0, i;
+	strcat((char*)host,".");
+	for(i = 0 ; i < strlen((char*)host) ; i++) {
+		if(host[i]=='.'){
+			*dns++ = i-lock;
+			for(; lock < i; lock++) {
+				*dns++ = host[lock];
+			}
+			lock++;
+		}
+	}
+	*dns++=0x00;
+}
+
+
 // Source IP, source port, target IP, target port from the command line arguments
 int main(int argc, char *argv[]){
 
@@ -68,6 +103,7 @@ int main(int argc, char *argv[]){
     // Our own headers' structures
     struct ipheader *ip = (struct ipheader *) buffer;
     struct udpheader *udp = (struct udpheader *) (buffer + sizeof(struct ipheader));
+    // struct dnsheader *dns = (struct dnsheader *) (buffer + sizeof(struct ipheader) + sizeof(struct udpheader));
 
     // Source and destination addresses: IP and port
     struct sockaddr_in sin, din;
@@ -131,6 +167,47 @@ int main(int argc, char *argv[]){
     // Calculate the checksum for integrity
     ip->iph_chksum = csum((unsigned short *)buffer, sizeof(struct ipheader) + sizeof(struct udpheader));
 
+
+    struct dnsheader *dns = (struct dnsheader *) (buffer + sizeof(struct ipheader) + sizeof(struct udpheader));
+	dns->id = (unsigned short) htons(getpid());
+	dns->flags = htons(0x0100);
+	dns->qcount = htons(1);
+	dns->ans  = 0;
+	dns->auth = 0;
+	dns->add  = 0;
+
+
+    unsigned char *packet_headers;
+    packet_headers = (unsigned char *)(buffer + sizeof(struct ipheader) + sizeof(struct udpheader) + sizeof(struct dnsheader));
+	
+    // dns_name = (unsigned char *)&dns_data[sizeof(dns_hdr)];
+	// strcpy(dns_rcrd, dns_record);
+
+    unsigned char dns_domain[] = "www.google.com";
+	dns_query_format(packet_headers , dns_domain);
+	
+
+
+
+	struct dnsquery *q;
+	q = (query *)(buffer + sizeof(struct ipheader) + sizeof(struct udpheader) + sizeof(struct dnsheader) + (strlen(dns_name)+1);
+	q->qtype  = htons(0x00ff);  // ANY ??
+	q->qclass = htons(0x1);
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     // Inform the kernel do not fill up the packet structure. we will build our own...
     if(setsockopt(sd, IPPROTO_IP, IP_HDRINCL, val, sizeof(one)) < 0){
         perror("setsockopt() error");
@@ -146,7 +223,7 @@ int main(int argc, char *argv[]){
     printf("Using Source IP: %s port: %u, Target IP: %s port: %u.\n", argv[1], atoi(argv[2]), argv[3], atoi(argv[4]));
 
     int count;
-    for(count = 1; count <=20; count++){
+    for(count = 1; count <=10; count++){
         
         // Verify
         if(sendto(sd, buffer, ip->iph_len, 0, (struct sockaddr *)&sin, sizeof(sin)) < 0){
