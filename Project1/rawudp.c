@@ -23,7 +23,6 @@ struct ipheader {
 	unsigned short int iph_len;
 	unsigned short int iph_ident;
 	unsigned short int iph_flagnoffset;
-	//unsigned short int iph_flag:4, iph_offset:12;
 	unsigned char      iph_ttl;
 	unsigned char      iph_protocol;
 	unsigned short int iph_chksum;
@@ -164,6 +163,7 @@ int main(int argc, char *argv[]){
 	ip->iph_ihl = 5;
 	ip->iph_ver = 4;
 	ip->iph_tos = 0;
+	ip->iph_len = sizeof(struct ipheader) + sizeof(struct udpheader);
 	ip->iph_ident = htons(getpid());
 	ip->iph_flagnoffset = htons(0x4000);
 	ip->iph_ttl = 64; // hops
@@ -180,7 +180,6 @@ int main(int argc, char *argv[]){
 
 	// Fabricate the UDP header. Source port number, redundant
 	udp->udph_srcport = htons(atoi(argv[2]));
-
 	// Destination port number
 	udp->udph_destport = htons(atoi(argv[4]));
 
@@ -212,32 +211,10 @@ int main(int argc, char *argv[]){
 	dns_domain_format(packet_headers, domain_name);
 
 	
-	// // Standard DNS Domain Name Notation
-	// // e.g. "www.nctu.edu.tw" -> "3www4nctu3edu2tw0"
-	// unsigned char dnsq_dname[strlen((char *)domain_name)+2];
-
-	// int pos, point_cnt = 0;
-	// dnsq_dname[0] = '.';
-	// dnsq_dname[strlen((char *)domain_name)+1] = 0;
-	// for(pos = strlen((char *)domain_name); pos >= 0; pos--){
-	// 	point_cnt++;
-	// 	if(pos-1 >= 0)
-	// 		dnsq_dname[pos] = domain_name[pos-1];
-	// 	if(dnsq_dname[pos] == '.'){
-	// 		dnsq_dname[pos] = point_cnt-1;
-	// 		point_cnt = 0;
-	// 	}
-	// }
-
-	// unsigned char *ptr = (unsigned char * ) (buffer + sizeof(struct ipheader) + sizeof(struct udpheader) + sizeof(struct dnsheader));
-	// for(pos = 0; pos <= strlen((char *)domain_name)+1; pos++){
-	// 	*ptr = dnsq_dname[pos];
-	// 	*ptr++;
-	// }
 
 	struct dnsquery *dnsq = (struct dnsquery * ) (buffer + sizeof(struct ipheader) + sizeof(struct udpheader) + sizeof(struct dnsheader) + sizeof(domain_name) + 2);
-	dnsq->dnsq_qclass = htons(0x0001);
 	dnsq->dnsq_qtype  = htons(0x00ff);
+	dnsq->dnsq_qclass = htons(0x0001);
 
 	struct dnsadditional *dnsa = (struct dnsadditional * ) (buffer + sizeof(struct ipheader) + sizeof(struct udpheader) + sizeof(struct dnsheader) + sizeof(domain_name) + 2 + sizeof(struct dnsquery) + 1);
 	dnsa->dnsa_type = htons(41);
