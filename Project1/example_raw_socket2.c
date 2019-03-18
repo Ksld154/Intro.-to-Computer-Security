@@ -75,19 +75,31 @@ unsigned short csum(unsigned short *buf, int nwords){       //
 
 // format dns query's domain name
 // example: turn "www.google.com" into "3www6google3com0"
-void dns_query_format(unsigned char *dns, unsigned char *host){
-	int lock = 0, i;
-	strcat((char*)host, ".");
-	for(i = 0 ; i < strlen((char*)host) ; i++) {
-		if(host[i]=='.'){
-			*dns++ = i-lock;
-			for(; lock < i; lock++) {
-				*dns++ = host[lock];
+void dns_domain_format(unsigned char *all_headers, unsigned char *host){
+	strcat((char *)host, ".");
+
+	// indicate the position where previous word end.
+	int placeholder = 0;
+
+	for(int i = 0; i <= strlen((char *)host); i++){
+
+		if(host[i] == '.'){
+			// replace the dot with current word's length
+			*all_headers = i - placeholder;
+			all_headers++;
+
+			// shift right 1 byte for all the letters in this word 
+			for(; placeholder < i; placeholder++){
+				*all_headers = host[placeholder];
+				all_headers++;
 			}
-			lock++;
+			placeholder++;
 		}
 	}
-	*dns++=0x00;  // indicate the end of the string
+
+	// put one byte zero to indicate the end of the string
+	*all_headers = 0x00;
+	all_headers++;
 }
 
 
@@ -181,16 +193,11 @@ int main(int argc, char *argv[]){
 
     unsigned char *packet_headers;
     packet_headers = (unsigned char *)(buffer + sizeof(struct ipheader) + sizeof(struct udpheader) + sizeof(struct dnsheader));
-	
-    // dns_name = (unsigned char *)&dns_data[sizeof(dns_hdr)];
-	// strcpy(dns_rcrd, dns_record);
-
     unsigned char dns_domain[] = "www.google.com";
     unsigned char dns_domain_save[] = "www.google.com";
-	// strcpy(dns_domain, dns_domain_save);
 
     int domain_len = strlen((const char *)dns_domain_save)+2;
-	dns_query_format(packet_headers, dns_domain);
+	dns_domain_format(packet_headers, dns_domain);
 	
 
 

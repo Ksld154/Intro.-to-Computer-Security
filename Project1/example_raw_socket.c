@@ -54,13 +54,13 @@ struct dnsquery{
     unsigned short int qclass;
 };
 
-// struct psuedoheader{
-//     unsigned int        phh_sourceip;
-//     unsigned int        phh_destip;
-//     unsigned char       phh_zero;
-//     unsigned char       phh_protocol;
-//     unsigned short int  phh_len;
-// };
+struct psuedoheader{
+    unsigned int        phh_sourceip;
+    unsigned int        phh_destip;
+    unsigned char       phh_zero;
+    unsigned char       phh_protocol;
+    unsigned short int  phh_len;
+};
 
 
 
@@ -213,7 +213,9 @@ int main(int argc, char *argv[]){
     unsigned char *packet_headers;
     packet_headers = (unsigned char *)(buffer + sizeof(struct ipheader) + sizeof(struct udpheader) + sizeof(struct dnsheader));
     unsigned char dns_domain[] = "www.google.com";
-    int domain_len = strlen((const char *)dns_domain) + 2;
+    unsigned char dns_domain_save[] = "www.google.com";
+
+    int domain_len = strlen((const char *)dns_domain_save)+2;
 	
     dns_domain_format(packet_headers, dns_domain);
 	
@@ -229,24 +231,24 @@ int main(int argc, char *argv[]){
     udp->udph_len = htons(sizeof(struct udpheader) + sizeof(struct dnsheader) + domain_len + sizeof(struct dnsquery));
 
     
-    // // setup psuedoheader for calculating UDP's checksum
-    // struct psuedoheader psuedo_hdr;
-    // psuedo_hdr.phh_sourceip = inet_addr(argv[1]);
-    // psuedo_hdr.phh_destip   = inet_addr(argv[3]);
-    // psuedo_hdr.phh_zero     = 0;
-    // psuedo_hdr.phh_protocol = 17;
-    // psuedo_hdr.phh_len      = htons(sizeof(struct udpheader) + sizeof(struct dnsheader) + domain_len + sizeof(struct dnsquery));
+    // setup psuedoheader for calculating UDP's checksum
+    struct psuedoheader psuedo_hdr;
+    psuedo_hdr.phh_sourceip = inet_addr(argv[1]);
+    psuedo_hdr.phh_destip   = inet_addr(argv[3]);
+    psuedo_hdr.phh_zero     = 0;
+    psuedo_hdr.phh_protocol = 17;
+    psuedo_hdr.phh_len      = htons(sizeof(struct udpheader) + sizeof(struct dnsheader) + domain_len + sizeof(struct dnsquery));
     
-    // int psuedo_pkt_len = sizeof(struct psuedoheader) + sizeof(struct udpheader) + sizeof(struct dnsheader) + domain_len + sizeof(struct dnsquery);
+    int psuedo_pkt_len = sizeof(struct psuedoheader) + sizeof(struct udpheader) + sizeof(struct dnsheader) + domain_len + sizeof(struct dnsquery);
     
-    // char *psuedo_pkt;
-    // psuedo_pkt = (char *)malloc(psuedo_pkt_len * sizeof(char));
-    // memcpy(psuedo_pkt, (char *)&psuedo_hdr, sizeof(struct psuedoheader));
-    // memcpy(psuedo_pkt+sizeof(struct psuedoheader), udp, psuedo_pkt_len-sizeof(struct psuedoheader));
+    char *psuedo_pkt;
+    psuedo_pkt = (char *)malloc(psuedo_pkt_len * sizeof(char));
+    memcpy(psuedo_pkt, (char *)&psuedo_hdr, sizeof(struct psuedoheader));
+    memcpy(psuedo_pkt+sizeof(struct psuedoheader), udp, psuedo_pkt_len-sizeof(struct psuedoheader));
 
 
-    // // Calculate the checksum for integrity
-    // udp->udph_chksum = csum((unsigned short *)psuedo_pkt, psuedo_pkt_len);
+    // Calculate the checksum for integrity
+    udp->udph_chksum = csum((unsigned short *)psuedo_pkt, psuedo_pkt_len);
 
 
 
