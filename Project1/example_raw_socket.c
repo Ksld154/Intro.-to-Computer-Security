@@ -54,6 +54,15 @@ struct dnsquery{
     unsigned short int qclass;
 };
 
+// struct psuedoheader{
+//     unsigned int        phh_sourceip;
+//     unsigned int        phh_destip;
+//     unsigned char       phh_zero;
+//     unsigned char       phh_protocol;
+//     unsigned short int  phh_len;
+// };
+
+
 
 
 //  Function for checksum calculation. From the RFC,
@@ -177,6 +186,7 @@ int main(int argc, char *argv[]){
     ip->iph_sourceip = inet_addr(argv[1]);
     // The destination IP address
     ip->iph_destip = inet_addr(argv[3]);
+    ip->iph_chksum = csum((unsigned short *)buffer, sizeof(struct ipheader));
     
 
     // Fabricate the UDP header.
@@ -186,9 +196,7 @@ int main(int argc, char *argv[]){
     udp->udph_chksum = htons(0);
 
 
-    // Calculate the checksum for integrity
-    ip->iph_chksum = csum((unsigned short *)buffer, sizeof(struct ipheader));
-    udp->udph_chksum = 
+
 
 
     // Setup DNS header
@@ -219,6 +227,28 @@ int main(int argc, char *argv[]){
     // modify header lengths
     ip->iph_len = sizeof(struct ipheader) + sizeof(struct udpheader) + sizeof(struct dnsheader) + domain_len + sizeof(struct dnsquery);
     udp->udph_len = htons(sizeof(struct udpheader) + sizeof(struct dnsheader) + domain_len + sizeof(struct dnsquery));
+
+    
+    // // setup psuedoheader for calculating UDP's checksum
+    // struct psuedoheader psuedo_hdr;
+    // psuedo_hdr.phh_sourceip = inet_addr(argv[1]);
+    // psuedo_hdr.phh_destip   = inet_addr(argv[3]);
+    // psuedo_hdr.phh_zero     = 0;
+    // psuedo_hdr.phh_protocol = 17;
+    // psuedo_hdr.phh_len      = htons(sizeof(struct udpheader) + sizeof(struct dnsheader) + domain_len + sizeof(struct dnsquery));
+    
+    // int psuedo_pkt_len = sizeof(struct psuedoheader) + sizeof(struct udpheader) + sizeof(struct dnsheader) + domain_len + sizeof(struct dnsquery);
+    
+    // char *psuedo_pkt;
+    // psuedo_pkt = (char *)malloc(psuedo_pkt_len * sizeof(char));
+    // memcpy(psuedo_pkt, (char *)&psuedo_hdr, sizeof(struct psuedoheader));
+    // memcpy(psuedo_pkt+sizeof(struct psuedoheader), udp, psuedo_pkt_len-sizeof(struct psuedoheader));
+
+
+    // // Calculate the checksum for integrity
+    // udp->udph_chksum = csum((unsigned short *)psuedo_pkt, psuedo_pkt_len);
+
+
 
 
     // Inform the kernel do not fill up the packet structure. we will build our own...
