@@ -22,8 +22,7 @@ struct ipheader {
     unsigned char      iph_tos;
     unsigned short int iph_len;
     unsigned short int iph_ident;
-    unsigned char      iph_flag:3;
-    unsigned short int iph_offset:13;
+    unsigned short int iph_flag_and_offset;
     unsigned char      iph_ttl;
     unsigned char      iph_protocol;
     unsigned short int iph_chksum;
@@ -62,7 +61,6 @@ struct dnsquery{
 //  "The checksum field is the 16 bit one's complement of the one's
 //  complement sum of all 16 bit words in the header.  For purposes of
 //  computing the checksum, the value of the checksum field is zero."
-
 unsigned short csum(unsigned short *buf, int nwords){       //
     unsigned long sum;
 
@@ -145,10 +143,11 @@ int main(int argc, char *argv[]){
     // standard header structures but assign our own values.
     ip->iph_ihl = 5;
     ip->iph_ver = 4;
-    ip->iph_tos = 16; // Low delay
+    ip->iph_tos = 0; // Low delay
     // ip->tot_len = sizeof(iph) + sizeof(udph) + sizeof(dns_hdr) + (strlen(dns_name)+1) + sizeof(query);
     ip->iph_len = sizeof(struct ipheader) + sizeof(struct udpheader);
-    ip->iph_ident = htons(54321);
+    ip->iph_ident = htons(getpid());
+    ip->iph_flag_and_offset = htons(0x4000);
     ip->iph_ttl = 64; // hops
     ip->iph_protocol = 17; // UDP
 
@@ -160,10 +159,12 @@ int main(int argc, char *argv[]){
 
     
     // Fabricate the UDP header. Source port number, redundant
-    udp->udph_srcport = htons(atoi(argv[2]));
+    udp->udph_srcport  = htons(atoi(argv[2]));
     // Destination port number
     udp->udph_destport = htons(atoi(argv[4]));
     udp->udph_len = htons(sizeof(struct udpheader));
+    udp->udph_chksum = htons(0);
+
 
     // Calculate the checksum for integrity
     ip->iph_chksum = csum((unsigned short *)buffer, sizeof(struct ipheader) + sizeof(struct udpheader));
@@ -218,7 +219,7 @@ int main(int argc, char *argv[]){
     printf("Using Source IP: %s port: %u, Target IP: %s port: %u.\n", argv[1], atoi(argv[2]), argv[3], atoi(argv[4]));
 
     int count;
-    for(count = 1; count <=10; count++){
+    for(count = 1; count <= 2; count++){
         
         // Verify
         if(sendto(sd, buffer, ip->iph_len, 0, (struct sockaddr *)&sin, sizeof(sin)) < 0){
@@ -227,7 +228,7 @@ int main(int argc, char *argv[]){
         }
         else{
             printf("Count #%u - sendto() is OK.\n", count);
-            sleep(2);
+            sleep(5);
         }
     }
     close(sd);
