@@ -83,32 +83,33 @@ struct dnsadditional {
 //  complement sum of all 16 bit words in the header.  For purposes of
 //  computing the checksum, the value of the checksum field is zero."
 
-unsigned short csum(unsigned short *buf, int nwords)
-{
+unsigned short csum(unsigned short *buf, int nwords){
 	unsigned long sum = 0;
 	unsigned short oddbyte = 0;
-	while(nwords > 1)
-	{
+	
+	while(nwords > 1){
 		sum += *buf++;
 		nwords -= 2;
 	}
-	if(nwords == 1)
-	{
+	if(nwords == 1){
 		*((unsigned char *) &oddbyte)=*(unsigned char *)buf;
 		sum += oddbyte;
 	}
+
+
 	sum = (sum >> 16) + (sum &0xffff);
 	sum += (sum >> 16);
+
 	return (unsigned short)(~sum);
 }
 
 
 
 // Source IP, source port, target IP, target port from the command line arguments
-int main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]){
 	srand(getpid());
 	int sd;
+	
 	// No data/payload just datagram
 	char buffer[PCKT_LEN];
 
@@ -121,10 +122,9 @@ int main(int argc, char *argv[])
 	int one = 1;
 	const int *val = &one;
 
-	memset(buffer, 0, PCKT_LEN);
+	memset(buffer, 0, PCKT_LEN);  // clean up buffer
 
-	if(argc != 5)
-	{
+	if(argc != 5){
 		printf("- Invalid parameters!!!\n");
 		printf("- Usage %s <source hostname/IP> <source port> <target hostname/IP> <target port>\n", argv[0]);
 		exit(-1);
@@ -132,28 +132,26 @@ int main(int argc, char *argv[])
 
 	// Create a raw socket with UDP protocol
 	sd = socket(PF_INET, SOCK_RAW, IPPROTO_UDP);
-	if(sd < 0)
-	{
-		perror("socket() error");
-
+	if(sd < 0){
 		// If something wrong just exit
+		perror("socket() error");
 		exit(-1);
-	}else
+	}
+	else{
 		printf("socket() - Using SOCK_RAW socket and UDP protocol is OK.\n");
+	}
 
 	// The source is redundant, may be used later if needed
-
 	// The address family
 	sin.sin_family = AF_INET;
 	din.sin_family = AF_INET;
-
 	// Port numbers
 	sin.sin_port = htons(atoi(argv[2]));
 	din.sin_port = htons(atoi(argv[4]));
-
 	// IP addresses
 	sin.sin_addr.s_addr = inet_addr(argv[1]);
 	din.sin_addr.s_addr = inet_addr(argv[3]);
+
 
 	// Fabricate the IP header or we can use the
 	// standard header structures but assign our own values.
@@ -167,16 +165,14 @@ int main(int argc, char *argv[])
 
 	// Source IP address, can use spoofed address here!!!
 	ip->iph_sourceip = inet_addr(argv[1]);
-
 	// The destination IP address
 	ip->iph_destip = inet_addr(argv[3]);
-
 	// Calculate the checksum for integrity
 	ip->iph_chksum = csum((unsigned short *)buffer, sizeof(struct ipheader));
 
+
 	// Fabricate the UDP header. Source port number, redundant
 	udp->udph_srcport = htons(atoi(argv[2]));
-
 	// Destination port number
 	udp->udph_destport = htons(atoi(argv[4]));
 	
