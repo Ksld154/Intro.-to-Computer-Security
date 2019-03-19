@@ -76,9 +76,9 @@ struct dnsadditional {
 //  computing the checksum, the value of the checksum field is zero."
 unsigned short csum(unsigned short *buf, int nwords){
 	unsigned long sum;
-	for(sum = 0; nwords > 0; nwords--)
+	for(sum = 0; nwords > 0; nwords -= 2)
 		sum += *buf++;
-	sum = (sum >> 16) + (sum &0xffff);
+	sum = (sum >> 16) + (sum & 0xffff);
 	sum += (sum >> 16);
 	return (unsigned short)(~sum);
 }
