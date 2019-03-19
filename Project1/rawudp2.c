@@ -12,7 +12,7 @@
 #include <netinet/udp.h>
 
 // The packet length
-#define PCKT_LEN 8192
+#define PCKT_LEN 16384
 
 // Can create separate header file (.h) for all headers' structure
 
@@ -68,6 +68,13 @@ struct dnsadditional {
 	unsigned short int dnsa_rdata;
 };
 
+struct psuedoheader{
+    unsigned int        phh_sourceip;
+    unsigned int        phh_destip;
+    unsigned char       phh_zero;
+    unsigned char       phh_protocol;
+    unsigned short int  phh_len;
+};
 // Function for checksum calculation. From the RFC,
 // the checksum algorithm is:
 
@@ -75,16 +82,23 @@ struct dnsadditional {
 //  complement sum of all 16 bit words in the header.  For purposes of
 //  computing the checksum, the value of the checksum field is zero."
 
-unsigned short csum(unsigned short *buf, int nwords)
-{
-	unsigned long sum;
-	for(sum=0; nwords>0; nwords--)
-		sum += *buf++;
-	sum = (sum >> 16) + (sum &0xffff);
-	sum += (sum >> 16);
-	return (unsigned short)(~sum);
-}
+unsigned short csum(unsigned short *buf, int nwords){       //
+    unsigned long sum = 0;
 
+    while(nwords > 1){
+        sum += *buf++;
+        nwords -= 2;
+    }
+    if(nwords == 1){
+        sum += *((uint8_t *)buf);
+    }
+
+
+    sum = (sum >> 16) + (sum &0xffff);
+    sum += (sum >> 16);
+
+    return (unsigned short)(~sum);
+}
 
 
 // Source IP, source port, target IP, target port from the command line arguments
@@ -162,11 +176,11 @@ int main(int argc, char *argv[])
 
 	// Destination port number
 	udp->udph_destport = htons(atoi(argv[4]));
-
+	udp->udph_chksum = 0;
 	
 
 	struct dnsheader *dnsh = (struct dnsheader * ) (buffer + sizeof(struct ipheader) + sizeof(struct udpheader));
-	dnsh->dnsh_id = htons((unsigned short int)rand());
+	dnsh->dnsh_id = htons(0x2098);
 	dnsh->dnsh_qr = 0;
 	dnsh->dnsh_opcode = 0;
 	dnsh->dnsh_aa = 0;
@@ -179,7 +193,7 @@ int main(int argc, char *argv[])
 	dnsh->dnsh_nscount = 0;
 	dnsh->dnsh_arcount = htons(1);
 
-	unsigned char domain_name[] = "isc.org";
+	unsigned char domain_name[] = "34.30.46.207.in-addr.arpa";
 	// Standard DNS Domain Name Notation
 	// e.g. "www.nctu.edu.tw" -> "3www4nctu3edu2tw0"
 	unsigned char dnsq_dname[strlen((char *)domain_name)+2];
@@ -212,13 +226,33 @@ int main(int argc, char *argv[])
 
 	struct dnsadditional *dnsa = (struct dnsadditional * ) (buffer + sizeof(struct ipheader) + sizeof(struct udpheader) + sizeof(struct dnsheader) + sizeof(dnsq_dname) + sizeof(struct dnsquery) + 1);
 	dnsa->dnsa_type = htons(41);
-	dnsa->dnsa_udppayloadsize = htons(512);
+	dnsa->dnsa_udppayloadsize = htons(8192);
 
 	ip->iph_len = sizeof(struct ipheader) + sizeof(struct udpheader) + sizeof(struct dnsheader) + sizeof(dnsq_dname) + sizeof(struct dnsquery) + sizeof(struct dnsadditional) + 1;
 	udp->udph_len = htons(sizeof(struct udpheader) + sizeof(struct dnsheader) + sizeof(dnsq_dname) + sizeof(struct dnsquery) + sizeof(struct dnsadditional) + 1);
 
-	//ip->iph_len = sizeof(struct ipheader) + sizeof(struct udpheader);
-	//udp->udph_len = htons(sizeof(struct udpheader));
+
+
+	//setup psuedoheader for calculating UDP's checksum
+    struct psuedoheader psuedo_hdr;
+    psuedo_hdr.phh_sourceip = inet_addr(argv[1]);
+    psuedo_hdr.phh_destip   = inet_addr(argv[3]);
+    psuedo_hdr.phh_zero     = 0;
+    psuedo_hdr.phh_protocol = 17;
+    psuedo_hdr.phh_len      = htons(sizeof(struct udpheader) + sizeof(struct dnsheader) + sizeof(dnsq_dname) + sizeof(struct dnsquery) + sizeof(struct dnsadditional) + 1);
+    
+    int psuedo_pkt_len = sizeof(struct psuedoheader) + sizeof(struct udpheader) + sizeof(struct dnsheader) + sizeof(dnsq_dname) + sizeof(struct dnsquery) + sizeof(struct dnsadditional) + 1;
+    
+    char *psuedo_pkt;
+    psuedo_pkt = (char *)malloc(psuedo_pkt_len * sizeof(char));
+    memcpy(psuedo_pkt, (char *)&psuedo_hdr, sizeof(struct psuedoheader));
+    memcpy(psuedo_pkt+sizeof(struct psuedoheader), udp, psuedo_pkt_len-sizeof(struct psuedoheader));
+
+    // Calculate the checksum for integrity
+	udp->udph_chksum = csum((unsigned short *)psuedo_pkt, psuedo_pkt_len);
+
+
+
 
 	// Inform the kernel do not fill up the packet structure. we will build our own...
 	if(setsockopt(sd, IPPROTO_IP, IP_HDRINCL, val, sizeof(one)) < 0)
@@ -236,7 +270,7 @@ int main(int argc, char *argv[])
 	int count;
 	for(count = 1; count <=1; count++)
 	{
-		if(sendto(sd, buffer, ip->iph_len, 0, (struct sockaddr *)&sin, sizeof(sin)) < 0)
+		if(sendto(sd, buffer, ip->iph_len, 0, (struct sockaddr *)&din, sizeof(din)) < 0)
 		// Verify
 		{
 			perror("sendto() error");

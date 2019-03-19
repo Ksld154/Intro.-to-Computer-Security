@@ -12,7 +12,7 @@
 #include <arpa/inet.h>
 
 // The packet length
-#define PCKT_LEN 8192
+#define PCKT_LEN 16384
 
 // Can create separate header file (.h) for all headers' structure
 
@@ -70,34 +70,26 @@ struct psuedoheader{
 //  "The checksum field is the 16 bit one's complement of the one's
 //  complement sum of all 16 bit words in the header.  For purposes of
 //  computing the checksum, the value of the checksum field is zero."
-unsigned short csum(unsigned short *buf, int nwords){       //
-    unsigned long sum;
 
-    for(sum = 0; nwords > 0; nwords--)
+unsigned short csum(unsigned short *buf, int nwords){       //
+    unsigned long sum = 0;
+
+    while(nwords > 1){
         sum += *buf++;
+        nwords -= 2;
+    }
+    if(nwords == 1){
+        sum += *((uint8_t *)buf);
+    }
+
     sum = (sum >> 16) + (sum &0xffff);
     sum += (sum >> 16);
 
     return (unsigned short)(~sum);
 }
 
-
 // format dns query's domain name
 // example: turn "www.google.com" into "3www6google3com0"
-void dns_query_format(unsigned char *dns, unsigned char *host){
-	int lock = 0, i;
-	strcat((char*)host, ".");
-	for(i = 0 ; i < strlen((char*)host) ; i++) {
-		if(host[i]=='.'){
-			*dns++ = i-lock;
-			for(; lock < i; lock++) {
-				*dns++ = host[lock];
-			}
-			lock++;
-		}
-	}
-	*dns++=0x00;  // indicate the end of the string
-}
 
 void dns_domain_format(unsigned char *all_headers, unsigned char *host){
 	strcat((char *)host, ".");
@@ -197,9 +189,7 @@ int main(int argc, char *argv[]){
 
 
 
-
-
-    // Setup DNS header
+    // Fabricate DNS header
     struct dnsheader *dns = (struct dnsheader *) (buffer + sizeof(struct ipheader) + sizeof(struct udpheader));
 	dns->query_id = (unsigned short) htons(getpid());
 	dns->flags = htons(0x0100);
@@ -212,17 +202,17 @@ int main(int argc, char *argv[]){
     // format the domain name in DNS query
     unsigned char *packet_headers;
     packet_headers = (unsigned char *)(buffer + sizeof(struct ipheader) + sizeof(struct udpheader) + sizeof(struct dnsheader));
-    unsigned char dns_domain[] = "www.google.com";
-    unsigned char dns_domain_save[] = "www.google.com";
-
+    unsigned char dns_domain[] = "isc.org";
+    unsigned char dns_domain_save[] = "irc.org";
     int domain_len = strlen((const char *)dns_domain_save)+2;
-	
+
     dns_domain_format(packet_headers, dns_domain);
 	
+
     //payload: DNS query
 	struct dnsquery *q;
 	q = (struct dnsquery *)(buffer + sizeof(struct ipheader) + sizeof(struct udpheader) + sizeof(struct dnsheader) + domain_len);
-	q->qtype  = htons(0x00ff);  // ANY ??
+	q->qtype  = htons(0x00ff);  // ANY 
 	q->qclass = htons(0x0001);  // IN
     
 
@@ -252,7 +242,6 @@ int main(int argc, char *argv[]){
 
 
 
-
     // Inform the kernel do not fill up the packet structure. we will build our own...
     if(setsockopt(sd, IPPROTO_IP, IP_HDRINCL, val, sizeof(one)) < 0){
         perror("setsockopt() error");
@@ -271,7 +260,7 @@ int main(int argc, char *argv[]){
     for(int count = 1; count <= 2; count++){
         
         // Verify
-        if(sendto(sd, buffer, ip->iph_len, 0, (struct sockaddr *)&sin, sizeof(sin)) < 0){
+        if(sendto(sd, buffer, ip->iph_len, 0, (struct sockaddr *)&din, sizeof(din)) < 0){
             perror("sendto() error");   
             exit(-1);
         }
