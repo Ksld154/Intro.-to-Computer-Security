@@ -136,7 +136,7 @@ int main(int argc, char *argv[]){
 
     memset(buffer, 0, PCKT_LEN); //clear buffer
     
-    // check commanf line arguments format
+    // check command line arguments format
     if(argc != 5){
         printf("- Invalid parameters!!!\n");
         printf("- Usage %s <source hostname/IP> <source port> <target hostname/IP> <target port>\n", argv[0]);
